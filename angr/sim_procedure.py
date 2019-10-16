@@ -353,31 +353,37 @@ class SimProcedure:
         p = procedure(project=self.project, **kwargs)
         return p.execute(self.state, None, arguments=e_args)
 
-    def ret(self, expr=None):
+    def ret(self, expr=None, state=None):
         """
         Add an exit representing a return from this function.
         If this is not an inline call, grab a return address from the state and jump to it.
         If this is not an inline call, set a return expression with the calling convention.
         """
-        self.inhibit_autoret = True
+        foreigen_state = state is not None
+        if state is None:
+            state = self.state
+
+        if not foreigen_state:
+            self.inhibit_autoret = True
 
         if expr is not None:
-            if o.SIMPLIFY_RETS in self.state.options:
+            if o.SIMPLIFY_RETS in state.options:
                 l.debug("... simplifying")
                 l.debug("... before: %s", expr)
-                expr = self.state.solver.simplify(expr)
+                expr = state.solver.simplify(expr)
                 l.debug("... after: %s", expr)
 
             if self.symbolic_return:
                 size = len(expr)
-                new_expr = self.state.solver.Unconstrained(
+                new_expr = state.solver.Unconstrained(
                         "symbolic_return_" + self.display_name,
                         size,
                         key=('symbolic_return', self.display_name)) #pylint:disable=maybe-no-member
-                self.state.add_constraints(new_expr == expr)
+                state.add_constraints(new_expr == expr)
                 expr = new_expr
 
-            self.ret_expr = expr
+            if not foreigen_state:
+                self.ret_expr = expr
 
         ret_addr = None
         # TODO: I had to put this check here because I don't understand why self.use_state_arguments gets reset to true
@@ -386,7 +392,7 @@ class SimProcedure:
             ret_addr = self._compute_ret_addr(expr) #pylint:disable=assignment-from-no-return
         elif self.use_state_arguments:
             ret_addr = self.cc.teardown_callsite(
-                    self.state,
+                    state,
                     expr,
                     arg_types=[False]*self.num_args if self.cc.args is None else None)
 
@@ -400,10 +406,10 @@ class SimProcedure:
         if ret_addr is None:
             raise SimProcedureError("No source for return address in ret() call!")
 
-        self._prepare_ret_state()
+        self._prepare_ret_state(state)
 
-        self._exit_action(self.state, ret_addr)
-        self.successors.add_successor(self.state, ret_addr, self.state.solver.true, 'Ijk_Ret')
+        self._exit_action(state, ret_addr)
+        self.successors.add_successor(state, ret_addr, self.state.solver.true, 'Ijk_Ret')
 
 
     def call(self, addr, args, continue_at, cc=None):
@@ -490,7 +496,7 @@ class SimProcedure:
     def is_java(self):
         return False
 
-    def _prepare_ret_state(self):
+    def _prepare_ret_state(self, state):
         pass
 
     @property
