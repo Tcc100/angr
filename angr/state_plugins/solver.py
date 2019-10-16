@@ -676,6 +676,8 @@ class SimSolver(SimStatePlugin):
                 return bytes([int(solution)])
             elif cast_to is int:
                 return int(solution)
+            elif cast_to is hex:
+                return hex(int(solution))
         elif type(solution) is float:
             solution = _concrete_value(claripy.FPV(solution, claripy.fp.FSort.from_size(len(e))).raw_to_bv())
 
@@ -683,6 +685,9 @@ class SimSolver(SimStatePlugin):
             if len(e) == 0:
                 return b""
             return binascii.unhexlify('{:x}'.format(solution).zfill(len(e)//4))
+
+        if cast_to is hex:
+            return hex(solution)
 
         if cast_to is not int:
             raise ValueError("cast_to parameter {!r} is not a valid cast target, currently supported are only int and bytes!".format(cast_to))
